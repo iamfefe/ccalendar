@@ -82,8 +82,10 @@
 <script>
 // ===== 設定：貼上你在 Google Cloud 建立的 OAuth 用戶端 ID =====
 const CLIENT_ID = '158710260245-sp68kdojoefehe08o4bt573cur0m0aka.apps.googleusercontent.com';
-const SCOPE = 'https://www.googleapis.com/auth/calendar.events';
-const API = 'https://www.googleapis.com/calendar/v3/calendars/primary/events';
+const SCOPE = 'https://www.googleapis.com/auth/calendar.events https://www.googleapis.com/auth/calendar.calendarlist.readonly';
+const BASE = 'https://www.googleapis.com/calendar/v3';
+const API = `${BASE}/calendars/primary/events`;
+const TOKEN_KEY = 'gtoken2'; // 權限範圍變了，換 key 讓舊的登入失效
 
 const $ = id => document.getElementById(id);
 const pad = n => String(n).padStart(2, '0');
@@ -146,7 +148,8 @@ $('text').addEventListener('input', () => {
 // ---------- Google 登入 ----------
 let token = null, tokenClient = null;
 try {
-  const saved = JSON.parse(localStorage.getItem('gtoken') || 'null');
+  localStorage.removeItem('gtoken');
+  const saved = JSON.parse(localStorage.getItem(TOKEN_KEY) || 'null');
   if (saved && saved.exp > Date.now()) token = saved.token;
 } catch (e) {}
 
@@ -156,7 +159,7 @@ function initClient() {
     callback: resp => {
       if (resp.error) { alert('登入失敗：' + resp.error); return; }
       token = resp.access_token;
-      try { localStorage.setItem('gtoken', JSON.stringify({ token, exp: Date.now() + (resp.expires_in - 60) * 1000 })); } catch (e) {}
+      try { localStorage.setItem(TOKEN_KEY, JSON.stringify({ token, exp: Date.now() + (resp.expires_in - 60) * 1000 })); } catch (e) {}
       showSignedIn();
       if (pending) { const p = pending; pending = null; p(); }
     }
@@ -183,7 +186,7 @@ async function gapi(url, opts = {}) {
   const res = await fetch(url, { ...opts, headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' } });
   if (res.status === 401) {
     token = null;
-    try { localStorage.removeItem('gtoken'); } catch (e) {}
+    try { localStorage.removeItem(TOKEN_KEY); } catch (e) {}
     return new Promise((ok, fail) => signIn(() => gapi(url, opts).then(ok, fail)));
   }
   if (!res.ok) throw new Error(await res.text());
@@ -227,17 +230,40 @@ async function loadToday() {
   const end = new Date(start); end.setDate(end.getDate() + 1);
   const q = new URLSearchParams({ timeMin: start.toISOString(), timeMax: end.toISOString(), singleEvents: 'true', orderBy: 'startTime' });
   try {
-    const data = await gapi(`${API}?${q}`);
-    todayEvents = (data.items || []).map(e => ({
-      title: e.summary || '（無標題）',
-      time: e.start.dateTime ? new Date(e.start.dateTime) : null
-    }));
+    // 讀取你在 Google 日曆裡有勾選顯示的所有日曆（含訂閱、公告、節日等）
+    const list = await gapi(`${BASE}/users/me/calendarList?minAccessRole=reader`);
+    const cals = (list.items || []).filter(c => c.selected && !c.hidden);
+    if (!cals.length) cals.push({ id: 'primary', backgroundColor: '#007aff' });
+    const results = await Promise.all(cals.map(c =>
+      gapi(`${BASE}/calendars/${encodeURIComponent(c.id)}/events?${q}`)
+        .then(d => (d.items || []).map(e => ({ ...e, _color: c.backgroundColor })))
+        .catch(() => [])  // 某個日曆讀不到就略過
+    ));
+    todayEvents = mergeEvents(results.flat());
     renderToday();
   } catch (err) {
     $('today').innerHTML = `<div class="empty">讀取失敗：${err.message}</div>`;
   }
 }
 $('refresh').onclick = loadToday;
+
+// 合併多個日曆：全天在前、依時間排序、去掉重複（同名同時間）
+function mergeEvents(items) {
+  const seen = new Set();
+  return items
+    .filter(e => e.status !== 'cancelled')
+    .map(e => ({
+      title: e.summary || '（無標題）',
+      time: e.start.dateTime ? new Date(e.start.dateTime) : null,
+      color: e._color
+    }))
+    .filter(e => {
+      const k = e.title + '|' + (e.time ? e.time.getTime() : 'allday');
+      if (seen.has(k)) return false;
+      seen.add(k); return true;
+    })
+    .sort((a, b) => (a.time ? a.time.getTime() : -1) - (b.time ? b.time.getTime() : -1));
+}
 
 function renderToday() {
   const box = $('today');
@@ -248,6 +274,7 @@ function renderToday() {
     const t = document.createElement('div'); t.className = 't';
     t.textContent = e.time ? `${pad(e.time.getHours())}:${pad(e.time.getMinutes())}` : '全天';
     const n = document.createElement('div'); n.textContent = e.title;
+    if (e.color) n.style.cssText = `border-left:4px solid ${e.color};padding-left:8px`;
     row.append(t, n); box.append(row);
   }
 }
