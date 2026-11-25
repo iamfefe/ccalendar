@@ -12,32 +12,34 @@
     :root { --bg:#000; --card:#1c1c1e; --fg:#f5f5f7; --muted:#98989d; --accent:#0a84ff; --border:#38383a; --ok:#30d158; }
   }
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--fg);
+  body { margin:0; font-size:32px; background:var(--bg); color:var(--fg);
     font-family:-apple-system, BlinkMacSystemFont, "PingFang TC", sans-serif;
     padding:env(safe-area-inset-top) 16px 32px; }
   main { max-width:520px; margin:0 auto; }
-  h1 { font-size:28px; margin:24px 0 4px; }
-  h2 { font-size:20px; margin:28px 0 8px; display:flex; justify-content:space-between; align-items:center; }
-  .hint { color:var(--muted); font-size:14px; margin:0 0 16px; }
-  textarea { width:100%; font-size:18px; padding:14px; border-radius:14px;
+  h1 { font-size:56px; margin:24px 0 4px; }
+  h2 { font-size:40px; margin:28px 0 8px; display:flex; flex-wrap:wrap; gap:8px; justify-content:space-between; align-items:center; }
+  .hint { color:var(--muted); font-size:28px; margin:0 0 16px; }
+  textarea { width:100%; font-size:36px; padding:14px; border-radius:14px;
     border:1px solid var(--border); background:var(--card); color:var(--fg); resize:none; }
   .card { background:var(--card); border-radius:14px; padding:14px; margin-top:14px; border:1px solid var(--border); }
   .row { display:flex; gap:8px; margin:8px 0; align-items:center; }
-  .row label { width:52px; color:var(--muted); font-size:14px; flex-shrink:0; }
-  .row input { flex:1; min-width:0; font-size:16px; padding:8px; border-radius:8px;
+  .row label { width:72px; color:var(--muted); font-size:28px; flex-shrink:0; }
+  .row input { flex:1; min-width:0; font-size:32px; padding:8px; border-radius:8px;
     border:1px solid var(--border); background:var(--bg); color:var(--fg); }
-  button { width:100%; font-size:17px; font-weight:600; padding:14px; border:0; border-radius:14px;
+  button { width:100%; font-size:34px; font-weight:600; padding:14px; border:0; border-radius:14px;
     margin-top:12px; background:var(--accent); color:#fff; }
   button.secondary { background:transparent; color:var(--accent); border:1px solid var(--accent); }
-  button.small { width:auto; font-size:14px; padding:6px 12px; margin:0; border-radius:10px; }
-  .btns { display:flex; gap:8px; }
+  button.small { width:auto; font-size:28px; padding:6px 12px; margin:0; border-radius:10px; }
+  .btns { display:flex; flex-direction:column; gap:0; }
   .btns button { flex:1; }
   .ev { display:flex; gap:12px; padding:10px 0; border-bottom:1px solid var(--border); }
   .ev:last-child { border-bottom:0; }
-  .ev .t { width:56px; flex-shrink:0; color:var(--accent); font-variant-numeric:tabular-nums; font-weight:600; }
+  .ev .t { width:100px; flex-shrink:0; color:var(--accent); font-variant-numeric:tabular-nums; font-weight:600; }
   .empty { color:var(--muted); padding:8px 0; }
-  .toast { color:var(--ok); font-size:14px; min-height:20px; margin-top:8px; text-align:center; }
-  .examples { color:var(--muted); font-size:13px; line-height:1.7; margin-top:16px; }
+  .toast { color:var(--ok); font-size:28px; min-height:20px; margin-top:8px; text-align:center; }
+  .examples { color:var(--muted); font-size:26px; line-height:1.7; margin-top:16px; }
+  input[type=checkbox] { width:32px; height:32px; }
+  .ev { align-items:baseline; }
 </style>
 </head>
 <body>
@@ -58,7 +60,7 @@
       <div class="row"><label>日期</label><input id="date" type="date"></div>
       <div class="row"><label>時間</label><input id="time" type="time"></div>
       <div class="row"><label>長度</label><input id="dur" type="number" value="60" min="5" step="15"><span style="color:var(--muted)">分鐘</span></div>
-      <div class="row"><label>全天</label><input id="allday" type="checkbox" style="flex:0"></div>
+      <div class="row"><label>全天</label><input id="allday" type="checkbox" style="flex:none"></div>
     </div>
 
     <button id="add">加入 Google 日曆</button>
