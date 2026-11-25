@@ -3,13 +3,13 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="快記行事曆">
 <title>快記行事曆</title>
+<script src="https://accounts.google.com/gsi/client" async></script>
 <style>
-  :root { --bg:#f5f5f7; --card:#fff; --fg:#1d1d1f; --muted:#6e6e73; --accent:#007aff; --border:#d2d2d7; }
+  :root { --bg:#f5f5f7; --card:#fff; --fg:#1d1d1f; --muted:#6e6e73; --accent:#007aff; --border:#d2d2d7; --ok:#34c759; }
   @media (prefers-color-scheme: dark) {
-    :root { --bg:#000; --card:#1c1c1e; --fg:#f5f5f7; --muted:#98989d; --accent:#0a84ff; --border:#38383a; }
+    :root { --bg:#000; --card:#1c1c1e; --fg:#f5f5f7; --muted:#98989d; --accent:#0a84ff; --border:#38383a; --ok:#30d158; }
   }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--fg);
@@ -17,6 +17,7 @@
     padding:env(safe-area-inset-top) 16px 32px; }
   main { max-width:520px; margin:0 auto; }
   h1 { font-size:28px; margin:24px 0 4px; }
+  h2 { font-size:20px; margin:28px 0 8px; display:flex; justify-content:space-between; align-items:center; }
   .hint { color:var(--muted); font-size:14px; margin:0 0 16px; }
   textarea { width:100%; font-size:18px; padding:14px; border-radius:14px;
     border:1px solid var(--border); background:var(--card); color:var(--fg); resize:none; }
@@ -28,6 +29,14 @@
   button { width:100%; font-size:17px; font-weight:600; padding:14px; border:0; border-radius:14px;
     margin-top:12px; background:var(--accent); color:#fff; }
   button.secondary { background:transparent; color:var(--accent); border:1px solid var(--accent); }
+  button.small { width:auto; font-size:14px; padding:6px 12px; margin:0; border-radius:10px; }
+  .btns { display:flex; gap:8px; }
+  .btns button { flex:1; }
+  .ev { display:flex; gap:12px; padding:10px 0; border-bottom:1px solid var(--border); }
+  .ev:last-child { border-bottom:0; }
+  .ev .t { width:56px; flex-shrink:0; color:var(--accent); font-variant-numeric:tabular-nums; font-weight:600; }
+  .empty { color:var(--muted); padding:8px 0; }
+  .toast { color:var(--ok); font-size:14px; min-height:20px; margin-top:8px; text-align:center; }
   .examples { color:var(--muted); font-size:13px; line-height:1.7; margin-top:16px; }
 </style>
 </head>
@@ -36,44 +45,63 @@
   <h1>快記行事曆</h1>
   <p class="hint">打一句話，例如「明天下午3點 看牙醫」</p>
 
-  <textarea id="text" rows="2" placeholder="12/5 15:00 看牙醫"></textarea>
-
-  <div class="card">
-    <div class="row"><label>事件</label><input id="title"></div>
-    <div class="row"><label>日期</label><input id="date" type="date"></div>
-    <div class="row"><label>時間</label><input id="time" type="time"></div>
-    <div class="row"><label>長度</label><input id="dur" type="number" value="60" min="5" step="15"><span style="color:var(--muted)">分鐘</span></div>
-    <div class="row"><label>全天</label><input id="allday" type="checkbox" style="flex:0"></div>
+  <div id="signedOut">
+    <button id="signin">登入 Google 日曆</button>
+    <p class="hint" style="margin-top:8px">登入後才能直接新增事件和讀取今天的行程</p>
   </div>
 
-  <button id="addIcs">加入 iPhone 行事曆</button>
-  <button id="addGoogle" class="secondary">加入 Google 日曆</button>
+  <div id="signedIn" hidden>
+    <textarea id="text" rows="2" placeholder="12/5 15:00 看牙醫"></textarea>
 
-  <div class="examples">
-    支援寫法：今天 / 明天 / 後天 / 週五 / 下週三 / 12/5 / 12月5日 / 2026-12-05<br>
-    時間：15:00 / 3點 / 下午3點半 / 晚上8點<br>
-    沒寫時間 → 自動設成全天事件
+    <div class="card">
+      <div class="row"><label>事件</label><input id="title"></div>
+      <div class="row"><label>日期</label><input id="date" type="date"></div>
+      <div class="row"><label>時間</label><input id="time" type="time"></div>
+      <div class="row"><label>長度</label><input id="dur" type="number" value="60" min="5" step="15"><span style="color:var(--muted)">分鐘</span></div>
+      <div class="row"><label>全天</label><input id="allday" type="checkbox" style="flex:0"></div>
+    </div>
+
+    <button id="add">加入 Google 日曆</button>
+    <div class="toast" id="toast"></div>
+
+    <h2>今天的行程 <button id="refresh" class="small secondary">重新整理</button></h2>
+    <div class="card" id="today"><div class="empty">載入中…</div></div>
+    <div class="btns">
+      <button id="speak">🔊 語音播報</button>
+      <button id="stop" class="secondary">停止</button>
+    </div>
+
+    <div class="examples">
+      支援寫法：今天 / 明天 / 後天 / 週五 / 下週三 / 12/5 / 12月5日 / 2026-12-05<br>
+      時間：15:00 / 3點 / 下午3點半 / 晚上8點<br>
+      沒寫時間 → 自動設成全天事件
+    </div>
   </div>
 </main>
 
 <script>
+// ===== 設定：貼上你在 Google Cloud 建立的 OAuth 用戶端 ID =====
+const CLIENT_ID = 'PASTE_YOUR_CLIENT_ID.apps.googleusercontent.com';
+const SCOPE = 'https://www.googleapis.com/auth/calendar.events';
+const API = 'https://www.googleapis.com/calendar/v3/calendars/primary/events';
+
 const $ = id => document.getElementById(id);
 const pad = n => String(n).padStart(2, '0');
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 const WD = { '日':0,'天':0,'一':1,'二':2,'三':3,'四':4,'五':5,'六':6 };
 const CN = { '一':1,'二':2,'兩':2,'三':3,'四':4,'五':5,'六':6,'七':7,'八':8,'九':9,'十':10,'十一':11,'十二':12 };
 
+// ---------- 文字解析 ----------
 function parse(text) {
   let s = text.trim();
   const today = new Date(); today.setHours(0,0,0,0);
   let date = null, time = null, m;
 
-  // --- date ---
   if ((m = s.match(/(\d{4})[-\/.年](\d{1,2})[-\/.月](\d{1,2})日?/))) {
     date = new Date(+m[1], m[2]-1, +m[3]);
   } else if ((m = s.match(/(\d{1,2})[\/月](\d{1,2})[日號]?/))) {
     date = new Date(today.getFullYear(), m[1]-1, +m[2]);
-    if (date < today) date.setFullYear(date.getFullYear()+1); // 已過就算明年
+    if (date < today) date.setFullYear(date.getFullYear()+1);
   } else if ((m = s.match(/今天|明天|後天|大後天/))) {
     date = new Date(today);
     date.setDate(date.getDate() + ({'今天':0,'明天':1,'後天':2,'大後天':3})[m[0]]);
@@ -82,7 +110,6 @@ function parse(text) {
     date = new Date(today);
     let diff = (target - today.getDay() + 7) % 7;
     if (m[1]) {
-      // 下週X：下週的那一天（週一為一週開始）
       const mondayOffset = (today.getDay() + 6) % 7;
       diff = 7 - mondayOffset + ((target + 6) % 7) + (m[1] === '下下' ? 7 : 0);
     }
@@ -90,7 +117,6 @@ function parse(text) {
   }
   if (m && date) s = s.replace(m[0], ' ');
 
-  // --- time ---
   if ((m = s.match(/(早上|上午|中午|下午|傍晚|晚上)?\s*(\d{1,2}):(\d{2})/))) {
     time = [+m[2], +m[3], m[1]];
   } else if ((m = s.match(/(早上|上午|中午|下午|傍晚|晚上)?\s*(\d{1,2}|十[一二]?|[一二兩三四五六七八九十])\s*[點点時](半|(\d{1,2})分?)?/))) {
@@ -109,59 +135,148 @@ function parse(text) {
   return { title, date: date ? ymd(date) : '', time: time || '' };
 }
 
-function fill() {
+$('text').addEventListener('input', () => {
   const r = parse($('text').value);
   $('title').value = r.title;
   $('date').value = r.date;
   $('time').value = r.time;
   $('allday').checked = !r.time;
-}
-$('text').addEventListener('input', fill);
+});
 
-function getEvent() {
+// ---------- Google 登入 ----------
+let token = null, tokenClient = null;
+try {
+  const saved = JSON.parse(localStorage.getItem('gtoken') || 'null');
+  if (saved && saved.exp > Date.now()) token = saved.token;
+} catch (e) {}
+
+function initClient() {
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: CLIENT_ID, scope: SCOPE,
+    callback: resp => {
+      if (resp.error) { alert('登入失敗：' + resp.error); return; }
+      token = resp.access_token;
+      try { localStorage.setItem('gtoken', JSON.stringify({ token, exp: Date.now() + (resp.expires_in - 60) * 1000 })); } catch (e) {}
+      showSignedIn();
+      if (pending) { const p = pending; pending = null; p(); }
+    }
+  });
+}
+(function waitGsi() { window.google?.accounts?.oauth2 ? initClient() : setTimeout(waitGsi, 100); })();
+
+let pending = null;
+function signIn(then) {
+  if (!tokenClient) { alert('Google 登入元件還在載入，請稍候再試'); return; }
+  pending = then || null;
+  tokenClient.requestAccessToken({ prompt: '' });
+}
+$('signin').onclick = () => signIn();
+
+function showSignedIn() {
+  $('signedOut').hidden = true;
+  $('signedIn').hidden = false;
+  loadToday();
+}
+if (token) showSignedIn();
+
+async function gapi(url, opts = {}) {
+  const res = await fetch(url, { ...opts, headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' } });
+  if (res.status === 401) {
+    token = null;
+    try { localStorage.removeItem('gtoken'); } catch (e) {}
+    return new Promise((ok, fail) => signIn(() => gapi(url, opts).then(ok, fail)));
+  }
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+// ---------- 新增事件 ----------
+$('add').onclick = async () => {
   const title = $('title').value.trim() || '新事件';
   const date = $('date').value || ymd(new Date());
   const allday = $('allday').checked || !$('time').value;
+  const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const [Y, M, D] = date.split('-').map(Number);
-  let start, end;
+  let body;
   if (allday) {
-    start = new Date(Y, M-1, D); end = new Date(Y, M-1, D+1);
+    body = { summary: title, start: { date }, end: { date: ymd(new Date(Y, M-1, D+1)) } };
   } else {
     const [h, mi] = $('time').value.split(':').map(Number);
-    start = new Date(Y, M-1, D, h, mi);
-    end = new Date(start.getTime() + (+$('dur').value || 60) * 60000);
+    const s = new Date(Y, M-1, D, h, mi);
+    const e = new Date(s.getTime() + (+$('dur').value || 60) * 60000);
+    body = { summary: title, start: { dateTime: s.toISOString(), timeZone: tz }, end: { dateTime: e.toISOString(), timeZone: tz } };
   }
-  return { title, allday, start, end };
+  $('add').disabled = true;
+  try {
+    await gapi(API, { method: 'POST', body: JSON.stringify(body) });
+    $('toast').textContent = `✓ 已加入：${title}`;
+    $('text').value = ''; $('title').value = ''; $('time').value = '';
+    loadToday();
+  } catch (err) {
+    alert('新增失敗：' + err.message);
+  } finally {
+    $('add').disabled = false;
+    setTimeout(() => $('toast').textContent = '', 3000);
+  }
+};
+
+// ---------- 今天的行程 ----------
+let todayEvents = [];
+async function loadToday() {
+  const start = new Date(); start.setHours(0,0,0,0);
+  const end = new Date(start); end.setDate(end.getDate() + 1);
+  const q = new URLSearchParams({ timeMin: start.toISOString(), timeMax: end.toISOString(), singleEvents: 'true', orderBy: 'startTime' });
+  try {
+    const data = await gapi(`${API}?${q}`);
+    todayEvents = (data.items || []).map(e => ({
+      title: e.summary || '（無標題）',
+      time: e.start.dateTime ? new Date(e.start.dateTime) : null
+    }));
+    renderToday();
+  } catch (err) {
+    $('today').innerHTML = `<div class="empty">讀取失敗：${err.message}</div>`;
+  }
+}
+$('refresh').onclick = loadToday;
+
+function renderToday() {
+  const box = $('today');
+  box.innerHTML = '';
+  if (!todayEvents.length) { box.innerHTML = '<div class="empty">今天沒有行程 🎉</div>'; return; }
+  for (const e of todayEvents) {
+    const row = document.createElement('div'); row.className = 'ev';
+    const t = document.createElement('div'); t.className = 't';
+    t.textContent = e.time ? `${pad(e.time.getHours())}:${pad(e.time.getMinutes())}` : '全天';
+    const n = document.createElement('div'); n.textContent = e.title;
+    row.append(t, n); box.append(row);
+  }
 }
 
-const fmtDate = d => `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}`;
-const fmtUTC = d => d.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
-const esc = t => t.replace(/[\\;,]/g, c => '\\' + c).replace(/\n/g, '\\n');
-
-$('addIcs').onclick = () => {
-  const e = getEvent();
-  const dt = e.allday
-    ? `DTSTART;VALUE=DATE:${fmtDate(e.start)}\r\nDTEND;VALUE=DATE:${fmtDate(e.end)}`
-    : `DTSTART:${fmtUTC(e.start)}\r\nDTEND:${fmtUTC(e.end)}`;
-  const ics = [
-    'BEGIN:VCALENDAR', 'VERSION:2.0', 'PRODID:-//quick-cal//ZH', 'CALSCALE:GREGORIAN',
-    'BEGIN:VEVENT',
-    `UID:${Date.now()}-${Math.random().toString(36).slice(2)}@quick-cal`,
-    `DTSTAMP:${fmtUTC(new Date())}`,
-    dt,
-    `SUMMARY:${esc(e.title)}`,
-    'END:VEVENT', 'END:VCALENDAR'
-  ].join('\r\n');
-  // iOS Safari 打開 text/calendar 會直接跳出「加入行事曆」
-  location.href = 'data:text/calendar;charset=utf-8,' + encodeURIComponent(ics);
+// ---------- 語音播報 ----------
+function spokenTime(d) {
+  const h = d.getHours(), m = d.getMinutes();
+  const period = h < 5 ? '凌晨' : h < 12 ? '早上' : h < 13 ? '中午' : h < 18 ? '下午' : '晚上';
+  const h12 = h > 12 ? h - 12 : (h === 0 ? 12 : h);
+  return `${period}${h12}點` + (m === 0 ? '' : m === 30 ? '半' : `${m}分`);
+}
+function buildSpeech(events, now = new Date()) {
+  const wd = '日一二三四五六'[now.getDay()];
+  let s = `今天是${now.getMonth()+1}月${now.getDate()}日，星期${wd}。`;
+  if (!events.length) return s + '今天沒有行程。';
+  s += `今天有${events.length}個行程。`;
+  for (const e of events) s += (e.time ? `${spokenTime(e.time)}，` : '全天，') + `${e.title}。`;
+  return s;
+}
+$('speak').onclick = () => {
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(buildSpeech(todayEvents));
+  u.lang = 'zh-TW';
+  const v = speechSynthesis.getVoices().find(v => v.lang === 'zh-TW');
+  if (v) u.voice = v;
+  u.rate = 1;
+  speechSynthesis.speak(u);
 };
-
-$('addGoogle').onclick = () => {
-  const e = getEvent();
-  const dates = e.allday ? `${fmtDate(e.start)}/${fmtDate(e.end)}` : `${fmtUTC(e.start)}/${fmtUTC(e.end)}`;
-  const url = `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(e.title)}&dates=${dates}`;
-  window.open(url, '_blank');
-};
+$('stop').onclick = () => speechSynthesis.cancel();
 </script>
 </body>
 </html>
